@@ -40,6 +40,18 @@ static int pthread_setaffinity_np (pthread_t thread, size_t cpu_size, cpu_set_t 
 }
 #endif
 
+#if defined(__ANDROID__)
+static int pthread_setaffinity_np (pthread_t thread, size_t cpusetsize, cpu_set_t* cpuset)
+{
+  if (pthread_self() != thread)
+    return EINVAL;
+
+  sched_setaffinity(0, cpusetsize, cpuset);
+
+  return 0;
+}
+#endif
+
 #if defined (__FreeBSD__)
 #include <pthread_np.h>
 typedef cpuset_t cpu_set_t;

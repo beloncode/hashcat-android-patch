@@ -1,4 +1,8 @@
 
+#ifdef __ANDROID__
+#define lutimes(filename, times)\
+  utimes(filename, times)
+#endif
 
 static bool UnixSymlink(CommandData *Cmd,const char *Target,const wchar *LinkName,RarTime *ftm,RarTime *fta)
 {

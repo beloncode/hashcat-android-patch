@@ -93,6 +93,11 @@ typedef u64 u64a;
 #define VECT_SIZE 1
 #endif
 
+#if VECT_SIZE == 0
+#undef VECT_SIZE
+#define VECT_SIZE 1
+#endif
+
 #define CONCAT(a, b)       a##b
 #define VTYPE(type, width) CONCAT(type, width)
 

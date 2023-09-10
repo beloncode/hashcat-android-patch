@@ -388,7 +388,10 @@
 #endif
 
 #if !defined(__MACTYPES__)
+#ifndef HAVE_BYTE_TYPE
+#define HAVE_BYTE_TYPE
 typedef unsigned char  Byte;  /* 8 bits */
+#endif
 #endif
 typedef unsigned int   uInt;  /* 16 bits or more */
 typedef unsigned long  uLong; /* 32 bits or more */

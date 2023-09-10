@@ -322,6 +322,7 @@ LFLAGS_NATIVE           += -lpthread
 LFLAGS_NATIVE           += -ldl
 LFLAGS_NATIVE           += -lrt
 LFLAGS_NATIVE           += -lm
+LFLAGS_NATIVE           += -liconv
 endif # Linux
 
 ifeq ($(UNAME),FreeBSD)

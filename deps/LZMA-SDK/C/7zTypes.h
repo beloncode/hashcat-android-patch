@@ -163,7 +163,11 @@ typedef int WRes;
 #define RINOK_WRes(x) { WRes __result__ = (x); if (__result__ != 0) return __result__; }
 #endif
 
+#ifndef HAVE_BYTE_TYPE
+#define HAVE_BYTE_TYPE
 typedef unsigned char Byte;
+#endif
+
 typedef short Int16;
 typedef unsigned short UInt16;
 
@@ -388,10 +392,10 @@ typedef struct
 {
   ILookInStream vt;
   const ISeekInStream *realStream;
- 
+
   size_t pos;
   size_t size; /* it's data size */
-  
+
   /* the following variables must be set outside */
   Byte *buf;
   size_t bufSize;
