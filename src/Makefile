@@ -314,6 +314,8 @@ endif
 ## Native compilation target
 ##
 
+DIST                    := $(shell uname -o)
+
 ifeq ($(UNAME),Linux)
 CFLAGS_NATIVE           := $(CFLAGS)
 CFLAGS_NATIVE           += -DWITH_HWMON
@@ -322,7 +324,9 @@ LFLAGS_NATIVE           += -lpthread
 LFLAGS_NATIVE           += -ldl
 LFLAGS_NATIVE           += -lrt
 LFLAGS_NATIVE           += -lm
+ifeq ($(DIST),Android)
 LFLAGS_NATIVE           += -liconv
+endif
 endif # Linux
 
 ifeq ($(UNAME),FreeBSD)
