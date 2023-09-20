@@ -1,5 +1,5 @@
 /**
- * Author......: hansvh
+ * Author......: See docs/credits.txt
  * License.....: MIT
  */
 
@@ -9,29 +9,27 @@
 #include "bitops.h"
 #include "convert.h"
 #include "shared.h"
+#include "emu_inc_hash_sha512.h"
+#include "memory.h"
 
 static const u32   ATTACK_EXEC    = ATTACK_EXEC_OUTSIDE_KERNEL;
 static const u32   DGST_POS0      = 0;
 static const u32   DGST_POS1      = 1;
 static const u32   DGST_POS2      = 2;
 static const u32   DGST_POS3      = 3;
-static const u32   DGST_SIZE      = DGST_SIZE_4_5;
-static const u32   HASH_CATEGORY  = HASH_CATEGORY_ARCHIVE;
-static const char *HASH_NAME      = "Kremlin Encrypt 3.0 w/NewDES";
-static const u64   KERN_TYPE      = 32700;
-static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE;
+static const u32   DGST_SIZE      = DGST_SIZE_8_16;
+static const u32   HASH_CATEGORY  = HASH_CATEGORY_OS;
+static const char *HASH_NAME      = "QNX 7 /etc/shadow (SHA512)";
+static const u64   KERN_TYPE      = 7100;
+static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE
+                                  | OPTI_TYPE_USES_BITS_64
+                                  | OPTI_TYPE_SLOW_HASH_SIMD_LOOP;
 static const u64   OPTS_TYPE      = OPTS_TYPE_STOCK_MODULE
-                                  | OPTS_TYPE_PT_GENERATE_LE;
+                                  | OPTS_TYPE_PT_GENERATE_LE
+                                  | OPTS_TYPE_ST_BASE64;
 static const u32   SALT_TYPE      = SALT_TYPE_EMBEDDED;
 static const char *ST_PASS        = "hashcat";
-static const char *ST_HASH        = "$kgb$0ab30cf7a52dad93$82a7c454246fc7570224e9f24279791aa2a63bf4";
-
-typedef struct sha1_tmp
-{
-  u32 salt32[8];
-  u32 newdes_key32[60];
-
-} sha1_tmp_t;
+static const char *ST_HASH        = "@S@vm2nBGHes6QkXra0f74XmouSiRzjYD3r/0py+txv0Kr8A4hCPMGFHoZqr41JFiYcJPPOeIheqFseMyLyw/15Pw==@NDY2MDEwNjk3YjBjYzM2MzliMzc3Mzc0ZTNiMTAzNzE=";
 
 u32         module_attack_exec    (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ATTACK_EXEC;     }
 u32         module_dgst_pos0      (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return DGST_POS0;       }
@@ -48,101 +46,179 @@ u32         module_salt_type      (MAYBE_UNUSED const hashconfig_t *hashconfig, 
 const char *module_st_hash        (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ST_HASH;         }
 const char *module_st_pass        (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ST_PASS;         }
 
-static const char *SIGNATURE_KGB = "$kgb$";
+typedef struct pbkdf2_sha512
+{
+  u32 salt_buf[64];
+
+} pbkdf2_sha512_t;
+
+typedef struct pbkdf2_sha512_tmp
+{
+  u64  ipad[8];
+  u64  opad[8];
+
+  u64  dgst[16];
+  u64  out[16];
+
+} pbkdf2_sha512_tmp_t;
+
+u64 module_esalt_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
+{
+  const u64 esalt_size = (const u64) sizeof (pbkdf2_sha512_t);
+
+  return esalt_size;
+}
 
 u64 module_tmp_size (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
 {
-  const u64 tmp_size = (const u64) sizeof (sha1_tmp_t);
+  const u64 tmp_size = (const u64) sizeof (pbkdf2_sha512_tmp_t);
 
   return tmp_size;
 }
 
-u32 module_kernel_loops_min (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
-{
-  const u32 kernel_loops_min = 1000;
-
-  return kernel_loops_min;
-}
-
-u32 module_kernel_loops_max (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra)
-{
-  const u32 kernel_loops_max = 1000;
-
-  return kernel_loops_max;
-}
+static const int ROUNDS_QNX = 4096;
+static const int HASH_SIZE  = 64;
 
 int module_hash_decode (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED void *digest_buf, MAYBE_UNUSED salt_t *salt, MAYBE_UNUSED void *esalt_buf, MAYBE_UNUSED void *hook_salt_buf, MAYBE_UNUSED hashinfo_t *hash_info, const char *line_buf, MAYBE_UNUSED const int line_len)
 {
-  u32 *digest = (u32 *) digest_buf;
+  u64 *digest = (u64 *) digest_buf;
+
+  pbkdf2_sha512_t *pbkdf2_sha512 = (pbkdf2_sha512_t *) esalt_buf;
 
   hc_token_t token;
 
   memset (&token, 0, sizeof (hc_token_t));
 
-  token.token_cnt = 3;
+  token.token_cnt  = 4;
 
-  token.signatures_cnt    = 1;
-  token.signatures_buf[0] = SIGNATURE_KGB;
+  // @digest@hash@salt
+  // @digest,iterations@hash@salt
 
-  token.len[0]      = 5;
-  token.attr[0]     = TOKEN_ATTR_FIXED_LENGTH
-                    | TOKEN_ATTR_VERIFY_SIGNATURE;
+  token.sep[0]     = '@';
+  token.len[0]     = 0;
+  token.attr[0]    = TOKEN_ATTR_FIXED_LENGTH;
 
-  token.sep[1]      = '$';
-  token.len_min[1]  = 16;
-  token.len_max[1]  = 16;
-  token.attr[1]     = TOKEN_ATTR_VERIFY_LENGTH
-                    | TOKEN_ATTR_VERIFY_HEX;
+  token.sep[1]     = '@';
+  token.len_min[1] = 1;
+  token.len_max[1] = 8;
+  token.attr[1]    = TOKEN_ATTR_VERIFY_LENGTH;
 
-  token.sep[2]      = '$';
-  token.len_min[2]  = 40;
-  token.len_max[2]  = 40;
-  token.attr[2]     = TOKEN_ATTR_VERIFY_LENGTH
-                    | TOKEN_ATTR_VERIFY_HEX;
+  token.sep[2]     = '@';
+  token.len_min[2] = 64;
+  token.len_max[2] = 100;
+  token.attr[2]    = TOKEN_ATTR_VERIFY_LENGTH
+                   | TOKEN_ATTR_VERIFY_BASE64A;
+
+  token.sep[3]     = '@';
+  token.len_min[3] = 32;
+  token.len_max[3] = 60;
+  token.attr[3]    = TOKEN_ATTR_VERIFY_LENGTH
+                   | TOKEN_ATTR_VERIFY_BASE64A;
 
   const int rc_tokenizer = input_tokenizer ((const u8 *) line_buf, line_len, &token);
 
   if (rc_tokenizer != PARSER_OK) return (rc_tokenizer);
 
-  // 8 bytes salt
-  const u8 *salt_pos = token.buf[1];
+  u8 tmp_buf[512];
 
-  salt->salt_buf[0] = hex_to_u32 (salt_pos + 0);
-  salt->salt_buf[1] = hex_to_u32 (salt_pos + 8);
+  memset (tmp_buf, 0, sizeof (tmp_buf));
 
-  salt->salt_len = 8;
-  salt->salt_iter = 1000;
+  // check hash type
 
-  // final "sha-1"-ish hash
+  if (token.buf[1][0] != 'S') return (PARSER_SIGNATURE_UNMATCHED);
+
+  // check iter
+
+  u32 iter = ROUNDS_QNX;
+
+  if (token.len[1] > 1)
+  {
+    if (token.buf[1][1] != ',') return (PARSER_SEPARATOR_UNMATCHED);
+
+    iter = hc_strtoul ((const char *) token.buf[1] + 2, NULL, 10);
+  }
+
+  salt->salt_iter = iter - 1; // iter++; the additional round is added in the init kernel
+
+  // salt
+
+  const u8 *salt_pos = token.buf[3];
+  const int salt_len = token.len[3];
+
+  memset (tmp_buf, 0, sizeof (tmp_buf));
+
+  const int decoded_salt_len = base64_decode (base64_to_int, salt_pos, salt_len, tmp_buf);
+
+  if (decoded_salt_len <   1) return (PARSER_SALT_LENGTH);
+  if (decoded_salt_len > 256) return (PARSER_SALT_LENGTH);
+
+  memcpy (salt->salt_buf, tmp_buf, decoded_salt_len);
+
+  salt->salt_len = decoded_salt_len;
+
+  memcpy (pbkdf2_sha512->salt_buf, tmp_buf, decoded_salt_len);
+
+  // hash
+
   const u8 *hash_pos = token.buf[2];
+  const int hash_len = token.len[2];
 
-  digest[0] = hex_to_u32 (hash_pos +  0);
-  digest[1] = hex_to_u32 (hash_pos +  8);
-  digest[2] = hex_to_u32 (hash_pos + 16);
-  digest[3] = hex_to_u32 (hash_pos + 24);
-  digest[4] = hex_to_u32 (hash_pos + 32);
+  const int decoded_hash_len = base64_decode (base64_to_int, hash_pos, hash_len, tmp_buf);
 
-  digest[0] = byte_swap_32 (digest[0]);
-  digest[1] = byte_swap_32 (digest[1]);
-  digest[2] = byte_swap_32 (digest[2]);
-  digest[3] = byte_swap_32 (digest[3]);
-  digest[4] = byte_swap_32 (digest[4]);
+  if (decoded_hash_len != HASH_SIZE) return (PARSER_SALT_LENGTH);
+
+  memcpy (digest, tmp_buf, decoded_hash_len);
+
+  digest[0] = byte_swap_64 (digest[0]);
+  digest[1] = byte_swap_64 (digest[1]);
+  digest[2] = byte_swap_64 (digest[2]);
+  digest[3] = byte_swap_64 (digest[3]);
+  digest[4] = byte_swap_64 (digest[4]);
+  digest[5] = byte_swap_64 (digest[5]);
+  digest[6] = byte_swap_64 (digest[6]);
+  digest[7] = byte_swap_64 (digest[7]);
 
   return (PARSER_OK);
 }
 
 int module_hash_encode (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const void *digest_buf, MAYBE_UNUSED const salt_t *salt, MAYBE_UNUSED const void *esalt_buf, MAYBE_UNUSED const void *hook_salt_buf, MAYBE_UNUSED const hashinfo_t *hash_info, char *line_buf, MAYBE_UNUSED const int line_size)
 {
-  const u32 *digest = (const u32 *) digest_buf;
+  const u64 *digest = (const u64 *) digest_buf;
 
-  const int out_len = snprintf (line_buf, line_size, "$kgb$%08x%08x$%08x%08x%08x%08x%08x",
-    byte_swap_32 (salt->salt_buf[0]),
-    byte_swap_32 (salt->salt_buf[1]),
-    digest[0],
-    digest[1],
-    digest[2],
-    digest[3],
-    digest[4]);
+  const pbkdf2_sha512_t *pbkdf2_sha512 = (const pbkdf2_sha512_t *) esalt_buf;
+
+  // need missing example for custom iterator count
+
+  // salt
+
+  u8 salt_buf[512] = { 0 };
+
+  base64_encode (int_to_base64, (const u8 *) pbkdf2_sha512->salt_buf, (const int) salt->salt_len, salt_buf);
+
+  // hash
+
+  u64 hash_tmp[8];
+
+  hash_tmp[0] = byte_swap_64 (digest[0]);
+  hash_tmp[1] = byte_swap_64 (digest[1]);
+  hash_tmp[2] = byte_swap_64 (digest[2]);
+  hash_tmp[3] = byte_swap_64 (digest[3]);
+  hash_tmp[4] = byte_swap_64 (digest[4]);
+  hash_tmp[5] = byte_swap_64 (digest[5]);
+  hash_tmp[6] = byte_swap_64 (digest[6]);
+  hash_tmp[7] = byte_swap_64 (digest[7]);
+
+  u8 hash_buf[512] = { 0 };
+
+  base64_encode (int_to_base64, (const u8 *) hash_tmp, (const int) 64, hash_buf);
+
+  // out
+
+  u8 *out_buf = (u8 *) line_buf;
+
+  const int out_len = snprintf ((char *) out_buf, line_size, "@S@%s@%s",
+    hash_buf,
+    salt_buf);
 
   return out_len;
 }
@@ -167,7 +243,7 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_dgst_pos3                = module_dgst_pos3;
   module_ctx->module_dgst_size                = module_dgst_size;
   module_ctx->module_dictstat_disable         = MODULE_DEFAULT;
-  module_ctx->module_esalt_size               = MODULE_DEFAULT;
+  module_ctx->module_esalt_size               = module_esalt_size;
   module_ctx->module_extra_buffer_size        = MODULE_DEFAULT;
   module_ctx->module_extra_tmp_size           = MODULE_DEFAULT;
   module_ctx->module_extra_tuningdb_block     = MODULE_DEFAULT;
@@ -200,8 +276,8 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_jit_cache_disable        = MODULE_DEFAULT;
   module_ctx->module_kernel_accel_max         = MODULE_DEFAULT;
   module_ctx->module_kernel_accel_min         = MODULE_DEFAULT;
-  module_ctx->module_kernel_loops_max         = module_kernel_loops_max;
-  module_ctx->module_kernel_loops_min         = module_kernel_loops_min;
+  module_ctx->module_kernel_loops_max         = MODULE_DEFAULT;
+  module_ctx->module_kernel_loops_min         = MODULE_DEFAULT;
   module_ctx->module_kernel_threads_max       = MODULE_DEFAULT;
   module_ctx->module_kernel_threads_min       = MODULE_DEFAULT;
   module_ctx->module_kern_type                = module_kern_type;
