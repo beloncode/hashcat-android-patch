@@ -547,7 +547,7 @@ static int outer_loop (hashcat_ctx_t *hashcat_ctx)
 
   if (module_ctx->module_deprecated_notice != MODULE_DEFAULT)
   {
-    if (user_options->deprecated_check_disable == false)
+    if (user_options->deprecated_check == true)
     {
       if ((user_options->show == true) || (user_options->left == true))
       {
@@ -1063,8 +1063,8 @@ int hashcat_init (hashcat_ctx_t *hashcat_ctx, void (*event) (const u32, struct h
     hashcat_ctx->event = event;
   }
 
-  hashcat_ctx->brain_ctx          = (brain_ctx_t *)           hcmalloc (sizeof (brain_ctx_t));
   hashcat_ctx->bitmap_ctx         = (bitmap_ctx_t *)          hcmalloc (sizeof (bitmap_ctx_t));
+  hashcat_ctx->brain_ctx          = (brain_ctx_t *)           hcmalloc (sizeof (brain_ctx_t));
   hashcat_ctx->combinator_ctx     = (combinator_ctx_t *)      hcmalloc (sizeof (combinator_ctx_t));
   hashcat_ctx->cpt_ctx            = (cpt_ctx_t *)             hcmalloc (sizeof (cpt_ctx_t));
   hashcat_ctx->debugfile_ctx      = (debugfile_ctx_t *)       hcmalloc (sizeof (debugfile_ctx_t));
