@@ -54,6 +54,7 @@ static const struct option long_options[] =
   {"debug-file",                required_argument, NULL, IDX_DEBUG_FILE},
   {"debug-mode",                required_argument, NULL, IDX_DEBUG_MODE},
   {"deprecated-check-disable",  no_argument,       NULL, IDX_DEPRECATED_CHECK_DISABLE},
+  {"dynamic-x",                 no_argument,       NULL, IDX_DYNAMIC_X},
   {"encoding-from",             required_argument, NULL, IDX_ENCODING_FROM},
   {"encoding-to",               required_argument, NULL, IDX_ENCODING_TO},
   {"example-hashes",            no_argument,       NULL, IDX_HASH_INFO}, // alias of hash-info
@@ -205,6 +206,7 @@ int user_options_init (hashcat_ctx_t *hashcat_ctx)
   user_options->debug_file                = NULL;
   user_options->debug_mode                = DEBUG_MODE;
   user_options->deprecated_check          = DEPRECATED_CHECK;
+  user_options->dynamic_x                 = DYNAMIC_X;
   user_options->encoding_from             = ENCODING_FROM;
   user_options->encoding_to               = ENCODING_TO;
   user_options->force                     = FORCE;
@@ -241,7 +243,7 @@ int user_options_init (hashcat_ctx_t *hashcat_ctx)
   user_options->metal_compiler_runtime    = METAL_COMPILER_RUNTIME;
   user_options->nonce_error_corrections   = NONCE_ERROR_CORRECTIONS;
   user_options->opencl_device_types       = NULL;
-  user_options->optimized_kernel_enable   = OPTIMIZED_KERNEL_ENABLE;
+  user_options->optimized_kernel          = OPTIMIZED_KERNEL;
   user_options->multiply_accel            = MULTIPLY_ACCEL;
   user_options->outfile_autohex           = OUTFILE_AUTOHEX;
   user_options->outfile_check_dir         = NULL;
@@ -401,6 +403,7 @@ int user_options_getopt (hashcat_ctx_t *hashcat_ctx, int argc, char **argv)
       case IDX_LEFT:                      user_options->left                      = true;                            break;
       case IDX_ADVICE_DISABLE:            user_options->advice                    = false;                           break;
       case IDX_USERNAME:                  user_options->username                  = true;                            break;
+      case IDX_DYNAMIC_X:                 user_options->dynamic_x                 = true;                            break;
       case IDX_REMOVE:                    user_options->remove                    = true;                            break;
       case IDX_REMOVE_TIMER:              user_options->remove_timer              = hc_strtoul (optarg, NULL, 10);
                                           user_options->remove_timer_chgd         = true;                            break;
@@ -485,7 +488,7 @@ int user_options_getopt (hashcat_ctx_t *hashcat_ctx, int argc, char **argv)
       case IDX_BACKEND_VECTOR_WIDTH:      user_options->backend_vector_width      = hc_strtoul (optarg, NULL, 10);
                                           user_options->backend_vector_width_chgd = true;                            break;
       case IDX_OPENCL_DEVICE_TYPES:       user_options->opencl_device_types       = optarg;                          break;
-      case IDX_OPTIMIZED_KERNEL_ENABLE:   user_options->optimized_kernel_enable   = true;                            break;
+      case IDX_OPTIMIZED_KERNEL_ENABLE:   user_options->optimized_kernel          = true;                            break;
       case IDX_MULTIPLY_ACCEL_DISABLE:    user_options->multiply_accel            = false;                           break;
       case IDX_WORKLOAD_PROFILE:          user_options->workload_profile          = hc_strtoul (optarg, NULL, 10);
                                           user_options->workload_profile_chgd     = true;                            break;
@@ -1049,9 +1052,9 @@ int user_options_sanity (hashcat_ctx_t *hashcat_ctx)
     }
   }
 
-  if ((user_options->show == true) && (user_options->username == true))
+  if ((user_options->show == true) && ((user_options->username == true) || (user_options->dynamic_x == true)))
   {
-    event_log_error (hashcat_ctx, "Mixing --show with --username can cause exponential delay in output.");
+    event_log_error (hashcat_ctx, "Mixing --show with --username or --dynamic-x can cause exponential delay in output.");
 
     return 0;
   }
@@ -1900,8 +1903,8 @@ void user_options_preprocess (hashcat_ctx_t *hashcat_ctx)
 
     if (user_options->workload_profile_chgd == false)
     {
-      user_options->optimized_kernel_enable = true;
-      user_options->workload_profile        = 3;
+      user_options->optimized_kernel  = true;
+      user_options->workload_profile  = 3;
     }
   }
 
@@ -2133,7 +2136,7 @@ void user_options_info (hashcat_ctx_t *hashcat_ctx)
       event_log_info (hashcat_ctx, "* --opencl-device-types=%s", user_options->opencl_device_types);
     }
 
-    if (user_options->optimized_kernel_enable == true)
+    if (user_options->optimized_kernel == true)
     {
       event_log_info (hashcat_ctx, "* --optimized-kernel-enable");
     }
@@ -2197,7 +2200,7 @@ void user_options_info (hashcat_ctx_t *hashcat_ctx)
       event_log_info (hashcat_ctx, "# option: --opencl-device-types=%s", user_options->opencl_device_types);
     }
 
-    if (user_options->optimized_kernel_enable == true)
+    if (user_options->optimized_kernel == true)
     {
       event_log_info (hashcat_ctx, "# option: --optimized-kernel-enable");
     }
@@ -3228,6 +3231,7 @@ void user_options_logger (hashcat_ctx_t *hashcat_ctx)
   logfile_top_uint   (user_options->bitmap_max);
   logfile_top_uint   (user_options->bitmap_min);
   logfile_top_uint   (user_options->debug_mode);
+  logfile_top_uint   (user_options->dynamic_x);
   logfile_top_uint   (user_options->hash_info);
   logfile_top_uint   (user_options->force);
   logfile_top_uint   (user_options->hwmon);
@@ -3258,7 +3262,7 @@ void user_options_logger (hashcat_ctx_t *hashcat_ctx)
   logfile_top_uint   (user_options->multiply_accel);
   logfile_top_uint   (user_options->backend_info);
   logfile_top_uint   (user_options->backend_vector_width);
-  logfile_top_uint   (user_options->optimized_kernel_enable);
+  logfile_top_uint   (user_options->optimized_kernel);
   logfile_top_uint   (user_options->outfile_autohex);
   logfile_top_uint   (user_options->outfile_check_timer);
   logfile_top_uint   (user_options->outfile_format);

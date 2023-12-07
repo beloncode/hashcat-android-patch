@@ -1483,3 +1483,20 @@ char *file_to_buffer (const char *filename)
 
   return NULL;
 }
+
+int extract_dynamicx_hash (const u8 *input_buf, const int input_len, u8 **output_buf, int *output_len)
+{
+  int hash_mode = -1;
+
+  if (sscanf ((char *) input_buf, "$dynamic_%d$", &hash_mode) != 1) return -1;
+
+  *output_buf = (u8 *) strchr ((char *) input_buf + 10, '$');
+
+  if (*output_buf == NULL) return -1;
+
+  *output_buf += 1; // the $ itself
+
+  *output_len = input_len - (*output_buf - input_buf);
+
+  return hash_mode;
+}

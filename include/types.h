@@ -638,6 +638,7 @@ typedef enum user_options_defaults
   #endif
   DEBUG_MODE               = 0,
   DEPRECATED_CHECK         = true,
+  DYNAMIC_X                = false,
   FORCE                    = false,
   HWMON                    = true,
   #if defined (__APPLE__)
@@ -680,7 +681,7 @@ typedef enum user_options_defaults
   BACKEND_IGNORE_OPENCL    = false,
   BACKEND_INFO             = 0,
   BACKEND_VECTOR_WIDTH     = 0,
-  OPTIMIZED_KERNEL_ENABLE  = false,
+  OPTIMIZED_KERNEL         = false,
   MULTIPLY_ACCEL           = true,
   OUTFILE_AUTOHEX          = true,
   OUTFILE_CHECK_TIMER      = 5,
@@ -757,6 +758,7 @@ typedef enum user_options_map
   IDX_DEBUG_FILE                = 0xff12,
   IDX_DEBUG_MODE                = 0xff13,
   IDX_DEPRECATED_CHECK_DISABLE  = 0xff14,
+  IDX_DYNAMIC_X                 = 0xff55,
   IDX_ENCODING_FROM             = 0xff15,
   IDX_ENCODING_TO               = 0xff16,
   IDX_HASH_INFO                 = 0xff17,
@@ -887,6 +889,13 @@ typedef void * hc_dynfunc_t;
  * structs
  */
 
+typedef struct dynamicx
+{
+  char *dynamicx_buf;
+  u32   dynamicx_len;
+
+} dynamicx_t;
+
 typedef struct user
 {
   char *user_name;
@@ -914,9 +923,10 @@ typedef struct split
 
 typedef struct hashinfo
 {
-  user_t  *user;
-  char    *orighash;
-  split_t *split;
+  dynamicx_t *dynamicx;
+  user_t     *user;
+  char       *orighash;
+  split_t    *split;
 
 } hashinfo_t;
 
@@ -2332,6 +2342,7 @@ typedef struct user_options
   #endif
   bool         force;
   bool         deprecated_check;
+  bool         dynamic_x;
   bool         hwmon;
   bool         hash_info;
   bool         hex_charset;
@@ -2351,7 +2362,7 @@ typedef struct user_options
   bool         backend_ignore_hip;
   bool         backend_ignore_metal;
   bool         backend_ignore_opencl;
-  bool         optimized_kernel_enable;
+  bool         optimized_kernel;
   bool         multiply_accel;
   bool         outfile_autohex;
   bool         outfile_json;
